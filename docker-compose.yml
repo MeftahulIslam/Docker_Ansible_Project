@@ -1,0 +1,108 @@
+version: '3.8'
+
+networks:
+  init:
+  net1:
+  net2:
+  net3:
+  net4:
+  net5:
+
+services:
+  init:
+    build:
+      context: init
+    container_name: initializer
+    command: sh /tmp/run.sh
+    depends_on:
+      - vhost1
+      - db
+      - caddy
+      - backup
+      - monitoring
+      - vhost2
+    networks:
+      - init
+
+  vhost1:
+    build:
+      context: vhost1
+    restart: unless-stopped
+    container_name: vhost1
+    depends_on:
+     - db
+     - caddy
+     - backup
+    networks:
+      - net1
+      - net4
+      - net5
+      - init
+
+  caddy:
+    build:
+      context: caddy
+    container_name: caddy
+    restart: unless-stopped
+    ports: 
+      - 80:80
+    networks:
+      - net1
+      - net2
+      - net3
+
+  db:
+    build: 
+      context: db
+    container_name: db
+    restart: always
+    environment:
+      MYSQL_ROOT_PASSWORD: 'faisalmeftahul'
+    ports:
+      - "3306:3306"
+    networks:
+      - net4
+      - init
+
+  backup:
+    build: 
+      context: ./backup/
+    container_name: backup
+    restart: unless-stopped
+    ports: 
+      - "21:21"
+    volumes:
+      - ./backup:/opt
+    networks:
+      - net5
+      - init
+
+  vhost2:
+    build: 
+      context: ./vhost2
+    container_name: vhost2
+    restart: unless-stopped
+    depends_on:
+      - caddy
+      - db
+    volumes:
+      - ./vhost2:/opt
+    networks: 
+      - net2
+      - init
+      - net4
+  
+  monitoring:
+    build:
+      context: statuspage
+      dockerfile: Dockerfile
+    container_name: monitoring
+    networks:
+      - net1
+      - net2
+      - init
+
+
+
+
+    

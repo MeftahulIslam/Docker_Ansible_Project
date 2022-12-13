@@ -1,0 +1,24 @@
+{
+    auto_https disable_redirects
+}
+
+http://vhost1.localhost {
+        basicauth {
+            user $2a$14$y/1.ICbp1xNviV0XA8hAuu4VE9uFKv967Kbp7zmogy5mgc1lMbiHG
+    }
+    reverse_proxy vhost1:80
+}
+
+http://vhost2.localhost {
+    basicauth {
+            user $2a$14$LqhZ6H9mBe4gtcMkNDgpz.uzRafaZk5LM7caFCK7JziQGLHjC2Poa
+    }
+    reverse_proxy vhost2:80
+}
+
+http://monitoring.localhost {
+    basicauth {
+            user $2a$14$Eqlzo0v1O7.ShjOkHSjk0OO7oxROrttg1zxpt82Fz6DyUK/B6plCq
+    }
+    reverse_proxy monitoring:80
+}

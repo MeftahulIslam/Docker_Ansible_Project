@@ -1,0 +1,205 @@
+---
+- name: Setup Database server
+  hosts: db
+  become: yes
+  tasks:
+    - name: Update all packages to their latest version
+      ansible.builtin.apt:
+        name: "*"
+        state: latest
+    - name: Install pacakges"
+      ansible.builtin.apt:
+        name:
+          - python3
+          - python3-pip
+          - python3-dev
+          - default-libmysqlclient-dev
+          - build-essential
+          - mysql-server
+          - mysql-client
+        state: latest
+        install_recommends: no
+    - name: Install mysqlclient
+      ansible.builtin.pip:
+        name: mysqlclient
+    - name: Start the MySQL service
+      shell: service mysql start
+    - name: Create database user with name 'mefta' and password 'mefta' with all database privileges
+      community.mysql.mysql_user:
+        name: "mefta"
+        password: "mefta"
+        priv: '*.*:ALL'
+        host: '%'
+        state: present
+    - name: Create new database
+      community.mysql.mysql_db:
+        name:
+          - db_main
+        state: present
+    - name: Enable remote login to mysql
+      shell: echo 'bind-address = 0.0.0.0' >> /etc/mysql/mysql.conf.d/mysql.cnf
+    - name: Add bind address
+      ansible.builtin.lineinfile:
+        path: /etc/mysql/mysql.conf.d/mysqld.cnf
+        line: bind-address = 0.0.0.0
+    - name: Update database from tmp/database.sql
+      shell: mysql -umisf -pmisf < /tmp/database.sql 
+    - name: replace the mysqld.cnf file
+      shell: cp /tmp/mysqld.cnf /etc/mysql/mysql.conf.d/mysqld.cnf
+    # - name: Restart service mysql
+      # ansible.builtin.service:
+      #   name: mysql
+      #   state: restarted
+    - name: restart mysql
+      shell: service mysql restart
+
+- name: Setup Backup server
+  hosts: backup
+  become: yes
+  tasks:
+    - name: Update all packages to their latest version
+      ansible.builtin.apt:
+        name: "*"
+        state: latest
+    - name: Install pacakges"
+      ansible.builtin.apt:
+        name:
+          - python3
+          - python3-pip
+          - python3-pyftpdlib
+        state: latest
+        install_recommends: no
+    - name: Install pip packages
+      ansible.builtin.pip:
+        name:
+          - pyftpdlib
+          - flask-restful
+    - name: Launch backup server
+      shell: nohup python3 /opt/server.py &
+
+- name: Setup vhost1 server
+  hosts: vhost1
+  become: yes
+  environment:
+    PATH: "{{ansible_env.PATH }}:/root/.pulumi/bin"
+    PULUMI_ACCESS_TOKEN: "pul-YOUR_ACCESS_TOKEN"
+  tasks:
+    - name: Update all packages to their latest version
+      ansible.builtin.apt:
+        name: "*"
+        state: latest
+    - name: Install pacakges
+      ansible.builtin.apt:
+        name:
+          - python3
+          - python3-pip
+          - python3.10-venv
+          - curl 
+          - unzip
+          - sudo
+        state: latest
+        install_recommends: no
+
+    - name: Install pip packages
+      ansible.builtin.pip:
+        name:
+          - flask-restful
+          - mysql-connector-python
+          - requests 
+          - pulumi
+          - pulumi_aws
+          - pyftpdlib
+          - pysftp
+        state: latest
+
+    - name: get PULUMI
+      shell: curl -fsSL https://get.pulumi.com | sh
+    
+    - name: login to PULUMI
+      shell: pulumi login
+
+    - name: download aws zip installation file
+      shell: curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
+      args:
+        warn: False
+    
+    - name: unzip the zip file
+      shell: unzip awscliv2.zip
+      args:
+        warn: False
+
+    - name: Install aws
+      shell: sudo ./aws/install
+      args:
+        warn: False
+    
+    - name: configure aws 
+      shell: aws configure import --csv file://credentials.csv
+
+    - name: make a new directory for the project and make the new project
+      shell: mkdir /opt/project_new && cd /opt/project_new && pulumi new aws-python --name insert_project_name --yes
+    
+    - name: change the name of the app from __main__.py to app.py
+      shell: mv /opt/project_new/__main__.py /opt/project_new/app.py
+    
+    - name: copy the app files from tmp/project_stuff to opt/project_new
+      shell: cp -r /tmp/project_stuff/* /opt/project_new/
+
+    - name: give executable privilege to app.py
+      shell: sudo chmod +rwx /opt/project_new/app.py
+
+    - name: Launch python server
+      shell: nohup python3 /opt/project_new/app.py & 
+
+- name: Setup vhost2 server
+  hosts: vhost2
+  become: yes
+  tasks:
+    - name: Update all packages to their latest version
+      ansible.builtin.apt:
+        name: "*"
+        state: latest
+    - name: Install pacakges"
+      ansible.builtin.apt:
+        name:
+          - python3
+          - python3-pip
+        state: latest
+        install_recommends: no
+    - name: Install pip packages
+      ansible.builtin.pip:
+        name:
+          - flask-restful
+          - mysql-connector-python
+          - requests 
+    - name: Launch python server
+      shell: nohup python3 /opt/dbScript.py &
+
+- name: Setup status server
+  hosts: monitoring
+  become: yes
+  tasks:
+    - name: Update all packages to their latest version
+      ansible.builtin.apt:
+        name: "*"
+        state: latest
+    # - name: Install pacakges"
+    #   ansible.builtin.apt:
+    #     name:
+    #       - python3
+    #       - python3-pip
+    #     state: latest
+    - name: Install packages
+      shell: apt install -y python3 python3-pip
+    # - name: Install pip packages
+    #   ansible.builtin.pip:
+    #     name:
+    #       - flask-restful
+    #       - jsonify
+    #       - requests
+    - name: Install pip packages
+      shell: pip3 install flask-restful jsonify requests
+    - name: Launch status server
+      shell: nohup python3 /tmp/server.py &
+
+    
